@@ -8,13 +8,15 @@ import robocode.HitRobotEvent;
 import robocode.HitWallEvent;
 import robocode.ScannedRobotEvent;
 
+import static robocode.util.Utils.normalAbsoluteAngleDegrees;
+import static robocode.util.Utils.normalRelativeAngleDegrees;
 
 
 public class WALLE extends AdvancedRobot{
     private final double CIRCLE = 360;
     private double enemyAbsBearing = 0; //敌方绝对bearing = 我方朝向 + 相对bearing
     private boolean scaned = false;
-    private double radarSpeed = 45;
+    private double radarSpeed = CIRCLE/8;
     private ScannedRobotEvent preEvent = new ScannedRobotEvent();
     private double preEnemyEnergy = 100;
 
@@ -50,14 +52,16 @@ public class WALLE extends AdvancedRobot{
     public void run() {
         setAdjustGunForRobotTurn(true);
         setAdjustRadarForGunTurn(true);
+        setAdjustRadarForRobotTurn(true);
 
         while(true) {
             out.println("radarSpeed" + radarSpeed);
-            turnRadarRight(radarSpeed);
+            setTurnRadarRight(radarSpeed);
             double radarHeading = getRadarHeading();
-            if(scaned && !outOfEnemyRange(radarHeading) && outOfEnemyRange(radarHeading + radarSpeed))
+            if(scaned && !outOfEnemyRange(radarHeading) && outOfEnemyRange(radarHeading + radarSpeed)) {
                 reverseRadar();
-
+                scaned = false;
+            }
 
 //            ahead(100);
 //            turnGunLeft(70);
@@ -68,7 +72,7 @@ public class WALLE extends AdvancedRobot{
 
     private boolean outOfEnemyRange(double radarHeading) {
         radarHeading = Mod(radarHeading);
-        return Math.abs( minimizeTurn(radarHeading - getEnemyAbsBearing()) ) > 90;
+        return Math.abs( minimizeTurn(radarHeading - getEnemyAbsBearing()) ) > CIRCLE/4;
     }
 
     @Override
@@ -76,18 +80,19 @@ public class WALLE extends AdvancedRobot{
         out.println(String.format("onHitWall\n getBearing: %f, getHeading: %f\n" +
                 "sum: %f\n", event.getBearing(), getHeading(), Mod(event.getBearing() + getHeading() + CIRCLE / 4)));
 
-        turnAsRefrect(getHeading(), Mod(event.getBearing() + getHeading() + CIRCLE / 4));     //为啥+90度？
+        turnAsReflect(getHeading(), Mod(event.getBearing() + getHeading() + CIRCLE / 4));     //为啥+90度？
     }
 
-    private void turnAsRefrect(double inAngle, double mirrorAngle) {
-        turnToTargetAngle( doRefrect(inAngle, mirrorAngle) );
-        ahead(50);
+    private void turnAsReflect(double inAngle, double mirrorAngle) {
+        turnToTargetAngle( doReflect(inAngle, mirrorAngle) );
+        setAhead(50);
+        execute();
     }
 
-    private double doRefrect(double inAngle, double mirrorAngle) {
+    private double doReflect(double inAngle, double mirrorAngle) {
         if(Math.abs( minimizeTurn(inAngle - mirrorAngle) ) > CIRCLE/4)
             mirrorAngle = reverseAngle(mirrorAngle);
-//        out.println(String.format("doRefrect\n inAngle: %f, mirrorAngle: %f\n" +
+//        out.println(String.format("doReflect\n inAngle: %f, mirrorAngle: %f\n" +
 //                "outAngle: %f\n", inAngle, mirrorAngle, Mod(2*mirrorAngle - inAngle)));
         return Mod(2*mirrorAngle - inAngle);
     }
@@ -95,7 +100,7 @@ public class WALLE extends AdvancedRobot{
 
     @Override
     public void onHitRobot(HitRobotEvent event) {
-        turnAsRefrect(getHeading(), Mod(event.getBearing() + getHeading() + CIRCLE / 4));
+        turnAsReflect(getHeading(), Mod(event.getBearing() + getHeading() + CIRCLE / 4));
 //        if (Math.abs(event.getBearing()) < 10)
 //            fire(1);
 //        if (event.isMyFault())
@@ -120,16 +125,16 @@ public class WALLE extends AdvancedRobot{
         out.println("angle:" + angle);
 
         if (Math.abs(angle) < 10) {
-            turnGunRight(angle+2);
-            fire(3);
+            setTurnGunRight(angle + 2);
+            setFire(3);
         }
 
 
         if(enemyMayFire(event))
             dodgeTheBullet();
         else {
-            keepCrossWise(event);   //与敌方炮口保持横向，以便躲避子弹
-            turnGunRight(angle);
+            keepCrossWise();   //与敌方炮口保持横向(垂直)，以便躲避子弹
+            setTurnGunRight(angle);
         }
 
         //setPreEvent(event);
@@ -138,7 +143,7 @@ public class WALLE extends AdvancedRobot{
         execute();
     }
 
-    private void keepCrossWise(ScannedRobotEvent event) {
+    private void keepCrossWise() {
         out.println(String.format("getBearing: %f\n", getEnemyAbsBearing()));
         turnToTargetAngle( Mod(getEnemyAbsBearing() + CIRCLE/4) );
     }
@@ -149,12 +154,12 @@ public class WALLE extends AdvancedRobot{
      */
     private void turnToTargetAngle(double targetAngle) {
         out.println(String.format("targetAngle: %f, Heading: %f\n", targetAngle, getHeading()));
-        turnRight(minimizeTurn(targetAngle - getHeading()));
+        setTurnRight(minimizeTurn(targetAngle - getHeading()));
     }
 
     private void dodgeTheBullet() {
         //turnLeft(10);
-        ahead(50);
+        setAhead(50);
     }
 
     private boolean enemyMayFire(ScannedRobotEvent event) {
@@ -176,13 +181,15 @@ public class WALLE extends AdvancedRobot{
     }
 
     private double Mod(double angle){   //取模,规整为[0~360)
-        double tmp = angle + CIRCLE * 999999;
-        return tmp - ((int)(tmp/CIRCLE))*CIRCLE;
+        return normalAbsoluteAngleDegrees(angle);
+//        double tmp = angle + CIRCLE * 999999;
+//        return tmp - ((int)(tmp/CIRCLE))*CIRCLE;
     }
 
     private double minimizeTurn(double angle){  //[0~360) => [-180~180)
-        angle = Mod(angle);
-        return angle>CIRCLE/2? angle-CIRCLE: angle;
+        return normalRelativeAngleDegrees(angle);
+//        angle = Mod(angle);
+//        return angle>CIRCLE/2? angle-CIRCLE: angle;
     }
 
     private double reverseAngle(double angle) {
